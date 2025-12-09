@@ -46,7 +46,7 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         
-        /* Enhanced Hero Gradient - Seamless Blend */
+        /* Enhanced Hero Gradient */
         .hero-overlay {
             background: radial-gradient(circle at top right, transparent 0%, #050505 120%),
                         linear-gradient(to top, #050505 0%, #050505 5%, rgba(5,5,5,0.8) 25%, transparent 60%);
@@ -74,7 +74,7 @@
                 <span class="text-2xl font-bold tracking-tight drop-shadow-md">StreamFlux</span>
             </div>
 
-            <!-- Search -->
+            <!-- Desktop Search -->
             <div class="hidden md:flex flex-1 max-w-lg mx-12 relative">
                 <div class="relative w-full group">
                     <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-white transition"></i>
@@ -87,6 +87,11 @@
 
             <!-- Right Actions -->
             <div class="flex items-center gap-4">
+                <!-- Mobile Search Toggle -->
+                <button onclick="toggleMobileSearch()" class="md:hidden p-2.5 bg-white/10 hover:bg-white/20 rounded-full transition backdrop-blur-md">
+                    <i data-lucide="search" class="w-5 h-5 text-white"></i>
+                </button>
+
                 <button onclick="document.getElementById('manualInputModal').classList.remove('hidden')" class="p-2.5 bg-white/10 hover:bg-white/20 rounded-full transition backdrop-blur-md border border-white/5" title="Manual Input">
                     <i data-lucide="terminal" class="w-5 h-5 text-gray-200"></i>
                 </button>
@@ -96,6 +101,14 @@
             </div>
         </div>
     </nav>
+
+    <!-- Mobile Search Bar (Hidden by default) -->
+    <div id="mobileSearch" class="fixed top-24 left-0 w-full bg-black/95 p-4 z-40 hidden border-b border-white/10 backdrop-blur-xl animate-fade-in">
+        <input type="text" placeholder="Search movies & shows..." 
+               class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-indigo-500 transition font-medium"
+               onkeyup="handleSearch(this.value)">
+        <div id="mobileSearchResults" class="mt-4 max-h-[60vh] overflow-y-auto"></div>
+    </div>
 
     <!-- Main Content -->
     <main id="homeView" class="relative z-10 w-full">
@@ -185,12 +198,6 @@
                     </div>
                     <span class="font-bold tracking-tight text-xl">StreamFlux</span>
                 </div>
-                <div class="flex justify-center gap-6 mb-8 text-sm text-gray-400">
-                    <a href="#" class="hover:text-white transition">Home</a>
-                    <a href="#" class="hover:text-white transition">Movies</a>
-                    <a href="#" class="hover:text-white transition">TV Shows</a>
-                    <a href="#" class="hover:text-white transition">DMCA</a>
-                </div>
                 <p class="text-gray-600 text-xs max-w-md mx-auto leading-relaxed">
                     StreamFlux does not host any content on its servers. All content is provided by non-affiliated third parties.
                 </p>
@@ -275,6 +282,8 @@
                     <option value="vidsrcto">🏆 VidSrc.to (HD)</option>
                     <option value="vidnest">🪺 VidNest (Clean)</option>
                     <option value="vidsrcme">🛡️ VidSrc.me (Backup)</option>
+                    <!-- UPDATED: Added 2Embed Source -->
+                    <option value="2embed">✌️ 2Embed (Alternative)</option>
                 </select>
             </div>
         </div>
@@ -305,7 +314,7 @@
 
     <script>
         lucide.createIcons();
-        const API_KEY = '84259f99204eeb7d45c7e3d8e36c6123';
+        const API_KEY = '84259f99204eeb7d45c7e3d8e36c6123'; // REMINDER: Replace with your own key
         let trendingData = [];
         let currentModalItem = null;
         let playData = { id: '', type: 'movie', season: 1, episode: 1 };
@@ -328,7 +337,7 @@
                 
                 setupHero(trendingData[0]); 
                 renderGrid(trendingData);
-            } catch (e) { console.error(e); }
+            } catch (e) { console.error("API Error:", e); }
         }
 
         function setupHero(item) {
@@ -455,6 +464,13 @@
                 case 'vidsrcto': url = type === 'movie' ? `https://vidsrc.to/embed/movie/${id}` : `https://vidsrc.to/embed/tv/${id}/${season}/${episode}`; break;
                 case 'vidnest': url = type === 'movie' ? `https://vidnest.fun/movie/${id}` : `https://vidnest.fun/tv/${id}/${season}/${episode}`; break;
                 case 'vidsrcme': url = type === 'movie' ? `https://vidsrc.me/embed/movie?tmdb=${id}` : `https://vidsrc.me/embed/tv?tmdb=${id}&season=${season}&episode=${episode}`; break;
+                
+                // UPDATED: New Source 2Embed
+                case '2embed': 
+                    url = type === 'movie' 
+                        ? `https://www.2embed.cc/embed/${id}` 
+                        : `https://www.2embed.cc/embedtv/${id}&s=${season}&e=${episode}`; 
+                    break;
             }
             iframe.src = url;
         }
@@ -463,7 +479,7 @@
             document.getElementById('videoFrame').src = '';
             document.getElementById('playerView').classList.add('hidden');
             document.getElementById('playerView').classList.remove('flex');
-            document.title = defaultTitle; // Reset title
+            document.title = defaultTitle; 
             loadHistory();
         }
 
@@ -474,20 +490,33 @@
 
         // --- Search ---
         let searchTimer;
+        
+        function toggleMobileSearch() {
+            const el = document.getElementById('mobileSearch');
+            el.classList.toggle('hidden');
+            if(!el.classList.contains('hidden')) el.querySelector('input').focus();
+        }
+
         function handleSearch(query) {
             clearTimeout(searchTimer);
-            const container = document.getElementById('searchResults');
-            if(query.length < 2) { container.classList.add('hidden'); return; }
+            const desktopContainer = document.getElementById('searchResults');
+            const mobileContainer = document.getElementById('mobileSearchResults');
+            
+            if(query.length < 2) { 
+                desktopContainer.classList.add('hidden'); 
+                mobileContainer.innerHTML = '';
+                return; 
+            }
             
             searchTimer = setTimeout(async () => {
                 const res = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${API_KEY}&query=${query}`);
                 const data = await res.json();
                 
-                container.innerHTML = data.results.slice(0,6).map(item => {
+                const html = data.results.slice(0,6).map(item => {
                     if(item.media_type === 'person') return '';
                     const img = item.poster_path ? `https://image.tmdb.org/t/p/w92${item.poster_path}` : 'https://via.placeholder.com/92x138';
                     return `
-                    <div onclick='openModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="flex gap-4 p-3 hover:bg-white/5 cursor-pointer transition border-b border-white/5 last:border-0 group">
+                    <div onclick='openModal(${JSON.stringify(item).replace(/'/g, "&#39;")}); toggleMobileSearch()' class="flex gap-4 p-3 hover:bg-white/5 cursor-pointer transition border-b border-white/5 last:border-0 group">
                         <img src="${img}" class="w-12 h-16 object-cover rounded shadow-lg group-hover:scale-105 transition">
                         <div>
                             <div class="font-bold text-sm text-white group-hover:text-indigo-400 transition">${item.title || item.name}</div>
@@ -498,7 +527,11 @@
                         </div>
                     </div>`;
                 }).join('');
-                container.classList.remove('hidden');
+                
+                desktopContainer.innerHTML = html;
+                desktopContainer.classList.remove('hidden');
+                
+                mobileContainer.innerHTML = html;
             }, 300);
         }
 
