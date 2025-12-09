@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamFlux - Immersive Cinema</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #050505;
+            color: white;
+            font-family: 'Outfit', sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* Hide Scrollbar */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Glassmorphism Navbar */
+        .glass-nav {
+            background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
+            pointer-events: none;
+        }
+        .glass-nav > div { pointer-events: auto; }
+        
+        /* Glass Cards */
+        .glass-panel {
+            background: rgba(20, 20, 30, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .poster-card { aspect-ratio: 2/3; }
+        
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        
+        /* Enhanced Hero Gradient - Seamless Blend */
+        .hero-overlay {
+            background: radial-gradient(circle at top right, transparent 0%, #050505 120%),
+                        linear-gradient(to top, #050505 0%, #050505 5%, rgba(5,5,5,0.8) 25%, transparent 60%);
+            pointer-events: none;
+        }
+        
+        /* Quality Badge */
+        .quality-badge {
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+
+    <!-- Navbar -->
+    <nav class="fixed top-0 w-full z-50 transition-all duration-300 glass-nav" id="navbar">
+        <div class="max-w-[1920px] mx-auto px-6 h-24 flex items-center justify-between">
+            <!-- Logo -->
+            <div onclick="resetApp()" class="flex items-center gap-3 cursor-pointer group">
+                <div class="bg-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform">
+                    <i data-lucide="zap" class="text-white w-5 h-5"></i>
+                </div>
+                <span class="text-2xl font-bold tracking-tight drop-shadow-md">StreamFlux</span>
+            </div>
+
+            <!-- Search -->
+            <div class="hidden md:flex flex-1 max-w-lg mx-12 relative">
+                <div class="relative w-full group">
+                    <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-white transition"></i>
+                    <input type="text" id="globalSearch" placeholder="Search titles, people, genres..." 
+                        class="w-full bg-black/40 border border-white/10 rounded-full py-3 pl-12 pr-4 text-sm focus:outline-none focus:bg-black/60 focus:border-indigo-500/50 transition-all text-white placeholder-gray-400 backdrop-blur-md"
+                        onkeyup="handleSearch(this.value)">
+                    <div id="searchResults" class="absolute top-14 left-0 w-full bg-[#0f0f0f] border border-white/10 rounded-2xl shadow-2xl hidden flex-col max-h-96 overflow-y-auto z-50"></div>
+                </div>
+            </div>
+
+            <!-- Right Actions -->
+            <div class="flex items-center gap-4">
+                <button onclick="document.getElementById('manualInputModal').classList.remove('hidden')" class="p-2.5 bg-white/10 hover:bg-white/20 rounded-full transition backdrop-blur-md border border-white/5" title="Manual Input">
+                    <i data-lucide="terminal" class="w-5 h-5 text-gray-200"></i>
+                </button>
+                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 border border-white/10 cursor-pointer hover:scale-105 transition">
+                    <i data-lucide="user" class="w-5 h-5 text-white"></i>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main id="homeView" class="relative z-10 w-full">
+        
+        <!-- HERO SECTION -->
+        <div id="heroSection" class="relative w-full min-h-screen flex items-end pb-12 md:pb-24">
+            <div id="heroBackground" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 transform scale-105 z-0"></div>
+            <div class="absolute inset-0 hero-overlay z-10"></div>
+            
+            <div class="relative z-30 w-full max-w-[1920px] mx-auto px-6 md:px-12 flex flex-col items-start gap-5 animate-fade-in pointer-events-none">
+                <div class="pointer-events-auto">
+                    <div class="flex items-center gap-3 mb-2">
+                        <span class="px-3 py-1 bg-white/10 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold uppercase tracking-widest rounded">
+                            #1 Trending
+                        </span>
+                        <span id="heroType" class="px-2 py-0.5 border border-white/30 text-gray-300 text-[10px] uppercase font-bold tracking-wider rounded">Movie</span>
+                    </div>
+
+                    <h1 id="heroTitle" class="text-5xl md:text-8xl font-black leading-none max-w-5xl drop-shadow-2xl text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-gray-400 mb-4">
+                        Loading...
+                    </h1>
+                    
+                    <div class="flex items-center gap-6 text-sm md:text-lg font-medium text-gray-200 mt-2 mb-4">
+                        <span id="heroRating" class="flex items-center gap-1.5 text-green-400"><i data-lucide="star" class="w-4 h-4 fill-current"></i> 0.0</span>
+                        <span id="heroYear">2024</span>
+                        <span class="text-gray-400">•</span>
+                        <span id="heroLang" class="uppercase">EN</span>
+                        <span class="quality-badge px-2 py-0.5 text-xs rounded text-white font-bold tracking-wide">4K ULTRA HD</span>
+                    </div>
+
+                    <p id="heroOverview" class="text-gray-300 max-w-2xl text-base md:text-xl line-clamp-3 md:line-clamp-3 leading-relaxed drop-shadow-md mb-8">
+                        Welcome to the ultimate streaming experience. Select a movie or show to begin.
+                    </p>
+
+                    <div class="flex flex-wrap items-center gap-4">
+                        <button id="heroPlayBtn" class="px-8 py-4 bg-white text-black rounded-xl font-bold text-lg flex items-center gap-3 hover:bg-indigo-50 transition transform hover:scale-105 shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)]">
+                            <i data-lucide="play" class="w-6 h-6 fill-current"></i> Watch Now
+                        </button>
+                        <button onclick="scrollToGrid()" class="px-8 py-4 bg-white/10 text-white border border-white/10 rounded-xl font-semibold text-lg flex items-center gap-3 hover:bg-white/20 transition backdrop-blur-md">
+                            <i data-lucide="layout-grid" class="w-6 h-6"></i> Browse
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTENT AREA (Fixed Layout) -->
+        <div id="contentArea" class="relative z-20 w-full max-w-[1920px] mx-auto px-6 md:px-12 py-8">
+            
+            <!-- Filters -->
+            <div class="flex items-center gap-3 mb-12 overflow-x-auto no-scrollbar pb-2">
+                <span class="text-gray-500 text-sm font-bold mr-2 uppercase tracking-wider whitespace-nowrap">Explore:</span>
+                <button onclick="filterTrending('all')" class="genre-btn active px-6 py-2.5 rounded-full text-sm font-bold bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 transition whitespace-nowrap hover:scale-105">All</button>
+                <button onclick="filterTrending('movie')" class="genre-btn px-6 py-2.5 rounded-full text-sm font-bold bg-[#1a1a1a] border border-white/10 hover:bg-white/10 hover:border-white/30 transition text-gray-300 whitespace-nowrap">Movies</button>
+                <button onclick="filterTrending('tv')" class="genre-btn px-6 py-2.5 rounded-full text-sm font-bold bg-[#1a1a1a] border border-white/10 hover:bg-white/10 hover:border-white/30 transition text-gray-300 whitespace-nowrap">TV Shows</button>
+            </div>
+
+            <!-- History Section -->
+            <div id="historySection" class="mb-16 hidden">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-3 text-white">
+                    <div class="w-1.5 h-6 bg-indigo-500 rounded-full"></div> Continue Watching
+                </h2>
+                <div id="historyGrid" class="flex gap-5 overflow-x-auto no-scrollbar pb-6"></div>
+            </div>
+
+            <!-- Trending Grid -->
+            <div class="mb-20">
+                <h2 class="text-2xl font-bold mb-8 flex items-center gap-3 text-white">
+                    <div class="w-1.5 h-6 bg-indigo-500 rounded-full"></div> Trending Now
+                </h2>
+                <div id="trendingGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                    <!-- Shimmers -->
+                    <div class="aspect-[2/3] bg-[#1a1a1a] rounded-xl animate-pulse"></div>
+                    <div class="aspect-[2/3] bg-[#1a1a1a] rounded-xl animate-pulse"></div>
+                    <div class="aspect-[2/3] bg-[#1a1a1a] rounded-xl animate-pulse"></div>
+                    <div class="aspect-[2/3] bg-[#1a1a1a] rounded-xl animate-pulse"></div>
+                    <div class="aspect-[2/3] bg-[#1a1a1a] rounded-xl animate-pulse"></div>
+                    <div class="aspect-[2/3] bg-[#1a1a1a] rounded-xl animate-pulse"></div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <footer class="border-t border-white/5 pt-12 pb-8 text-center">
+                <div class="flex items-center justify-center gap-2 mb-4 opacity-70 hover:opacity-100 transition">
+                    <div class="bg-indigo-600/20 p-2 rounded-lg">
+                        <i data-lucide="zap" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <span class="font-bold tracking-tight text-xl">StreamFlux</span>
+                </div>
+                <div class="flex justify-center gap-6 mb-8 text-sm text-gray-400">
+                    <a href="#" class="hover:text-white transition">Home</a>
+                    <a href="#" class="hover:text-white transition">Movies</a>
+                    <a href="#" class="hover:text-white transition">TV Shows</a>
+                    <a href="#" class="hover:text-white transition">DMCA</a>
+                </div>
+                <p class="text-gray-600 text-xs max-w-md mx-auto leading-relaxed">
+                    StreamFlux does not host any content on its servers. All content is provided by non-affiliated third parties.
+                </p>
+            </footer>
+        </div>
+    </main>
+
+    <!-- INFO MODAL -->
+    <div id="infoModal" class="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md hidden items-center justify-center p-4 transition-opacity duration-300 opacity-0">
+        <div class="glass-panel w-full max-w-5xl rounded-2xl overflow-hidden shadow-2xl transform scale-95 transition-transform duration-300 relative" id="modalContent">
+            
+            <!-- Close Button -->
+            <button onclick="closeModal()" class="absolute top-4 right-4 z-50 bg-black/50 p-2 rounded-full hover:bg-white/20 transition backdrop-blur-md group">
+                <i data-lucide="x" class="w-6 h-6 text-white group-hover:rotate-90 transition-transform"></i>
+            </button>
+
+            <!-- Modal Layout -->
+            <div class="flex flex-col md:flex-row h-auto max-h-[90vh]">
+                <div class="w-full md:w-[45%] h-56 md:h-auto relative">
+                    <div id="modalBackdrop" class="absolute inset-0 bg-cover bg-center"></div>
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#121212] md:bg-gradient-to-r md:from-transparent md:to-[#121212] z-10"></div>
+                </div>
+
+                <div class="flex-1 p-8 md:p-12 bg-[#121212] overflow-y-auto relative z-20">
+                    <h2 id="modalTitle" class="text-3xl md:text-5xl font-black mb-4 text-white leading-tight">Title</h2>
+                    
+                    <div class="flex flex-wrap items-center gap-4 text-sm text-gray-300 mb-8">
+                        <span id="modalRating" class="text-green-400 font-bold border border-green-400/30 px-2 py-0.5 rounded bg-green-400/10">00% Match</span>
+                        <span id="modalYear" class="font-bold text-white">2024</span>
+                        <span class="flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i> <span id="modalRuntime">-- min</span></span>
+                        <span class="quality-badge px-1.5 py-0.5 rounded text-[10px] uppercase font-bold text-white">HD</span>
+                        <span class="quality-badge px-1.5 py-0.5 rounded text-[10px] uppercase font-bold text-white">5.1</span>
+                    </div>
+
+                    <p id="modalOverview" class="text-gray-400 leading-relaxed mb-10 text-base md:text-lg">Overview...</p>
+
+                    <div class="flex flex-col gap-6">
+                        <div class="flex gap-3">
+                            <button id="modalPlayBtn" class="flex-1 bg-white text-black hover:bg-gray-200 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition transform active:scale-[0.98] shadow-lg shadow-white/10">
+                                <i data-lucide="play" class="w-5 h-5 fill-current"></i> Play Movie
+                            </button>
+                            <button onclick="shareContent()" class="px-5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition" title="Copy Link">
+                                <i data-lucide="share-2" class="w-5 h-5 text-gray-300"></i>
+                            </button>
+                        </div>
+                        
+                        <div id="modalTvSelectors" class="hidden p-5 bg-white/5 rounded-xl border border-white/5">
+                            <div class="flex items-center gap-2 mb-3">
+                                <i data-lucide="layers" class="w-4 h-4 text-indigo-400"></i>
+                                <span class="text-xs font-bold text-gray-300 uppercase tracking-wider">Select Episode</span>
+                            </div>
+                            <div class="flex gap-3">
+                                <div class="flex-1">
+                                    <label class="text-[10px] text-gray-500 block mb-1 font-bold">SEASON</label>
+                                    <input type="number" id="modalSeason" value="1" min="1" class="w-full bg-black border border-white/10 rounded-lg p-3 text-center font-bold text-lg outline-none focus:border-indigo-500 transition">
+                                </div>
+                                <div class="flex-1">
+                                    <label class="text-[10px] text-gray-500 block mb-1 font-bold">EPISODE</label>
+                                    <input type="number" id="modalEpisode" value="1" min="1" class="w-full bg-black border border-white/10 rounded-lg p-3 text-center font-bold text-lg outline-none focus:border-indigo-500 transition">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PLAYER OVERLAY -->
+    <div id="playerView" class="fixed inset-0 z-[70] bg-black hidden flex-col animate-fade-in">
+        <div class="h-16 bg-[#0a0a0a] flex items-center justify-between px-4 border-b border-white/5">
+            <button onclick="closePlayer()" class="flex items-center gap-2 text-gray-300 hover:text-white bg-white/10 px-4 py-2 rounded-full text-sm font-medium transition">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> <span class="hidden sm:inline">Back to Browse</span>
+            </button>
+            <div class="flex items-center gap-3">
+                <button id="nextEpBtn" onclick="nextEpisode()" class="hidden items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-full text-sm font-bold transition">
+                    Next Episode <i data-lucide="skip-forward" class="w-4 h-4"></i>
+                </button>
+                <select id="serverSelect" onchange="reloadVideo()" class="bg-[#1a1a1a] text-white text-xs border border-white/10 rounded-lg px-3 py-2 outline-none focus:border-indigo-500">
+                    <option value="vidlink">⚡ VidLink (Fast)</option>
+                    <option value="vidfast">🚀 VidFast (Ultra)</option>
+                    <option value="vidsrcto">🏆 VidSrc.to (HD)</option>
+                    <option value="vidnest">🪺 VidNest (Clean)</option>
+                    <option value="vidsrcme">🛡️ VidSrc.me (Backup)</option>
+                </select>
+            </div>
+        </div>
+        <div class="flex-1 relative bg-black">
+            <iframe id="videoFrame" src="" class="absolute inset-0 w-full h-full" frameborder="0" allowfullscreen></iframe>
+        </div>
+    </div>
+
+    <!-- Manual Input Modal -->
+    <div id="manualInputModal" class="fixed inset-0 z-[80] bg-black/90 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="bg-[#121212] w-full max-w-md p-6 rounded-2xl border border-white/10 shadow-2xl transform scale-100 transition-all">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold">Manual Entry</h3>
+                <button onclick="document.getElementById('manualInputModal').classList.add('hidden')"><i data-lucide="x" class="w-6 h-6 text-gray-400"></i></button>
+            </div>
+            <div class="flex gap-2 mb-4 bg-black/50 p-1 rounded-xl">
+                <button id="manualMovieBtn" onclick="toggleManualType('movie')" class="flex-1 py-2 rounded-lg text-sm font-bold bg-indigo-600 shadow-md transition">Movie</button>
+                <button id="manualTvBtn" onclick="toggleManualType('tv')" class="flex-1 py-2 rounded-lg text-sm font-bold text-gray-400 hover:text-white transition">TV Show</button>
+            </div>
+            <input type="text" id="manualId" placeholder="TMDB ID (e.g. 533535)" class="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-4 mb-3 focus:border-indigo-500 outline-none transition">
+            <div id="manualTvFields" class="grid grid-cols-2 gap-3 mb-4 hidden">
+                <input type="number" id="manualS" placeholder="Season" class="bg-[#1a1a1a] border border-white/10 rounded-xl p-4 outline-none text-center">
+                <input type="number" id="manualE" placeholder="Episode" class="bg-[#1a1a1a] border border-white/10 rounded-xl p-4 outline-none text-center">
+            </div>
+            <button onclick="manualPlay()" class="w-full bg-white text-black font-bold py-4 rounded-xl hover:bg-gray-200 transition transform active:scale-[0.98]">Launch Stream</button>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        const API_KEY = '84259f99204eeb7d45c7e3d8e36c6123';
+        let trendingData = [];
+        let currentModalItem = null;
+        let playData = { id: '', type: 'movie', season: 1, episode: 1 };
+        let manualType = 'movie';
+        const defaultTitle = "StreamFlux - Immersive Cinema";
+
+        // --- Init ---
+        window.onload = async () => {
+            await loadTrending();
+            checkUrlParams(); 
+            loadHistory();
+        };
+
+        // --- Core Logic ---
+        async function loadTrending() {
+            try {
+                const res = await fetch(`https://api.themoviedb.org/3/trending/all/day?api_key=${API_KEY}`);
+                const data = await res.json();
+                trendingData = data.results.filter(i => i.media_type !== 'person');
+                
+                setupHero(trendingData[0]); 
+                renderGrid(trendingData);
+            } catch (e) { console.error(e); }
+        }
+
+        function setupHero(item) {
+            if(!item) return;
+            document.getElementById('heroTitle').innerText = item.title || item.name;
+            document.getElementById('heroOverview').innerText = item.overview;
+            document.getElementById('heroRating').innerHTML = `<i data-lucide="star" class="w-4 h-4 fill-green-400 text-green-400"></i> ${item.vote_average.toFixed(1)}`;
+            document.getElementById('heroYear').innerText = (item.release_date || item.first_air_date || 'N/A').split('-')[0];
+            document.getElementById('heroLang').innerText = item.original_language;
+            document.getElementById('heroType').innerText = item.media_type === 'movie' ? 'Movie' : 'Series';
+            document.getElementById('heroBackground').style.backgroundImage = `url(https://image.tmdb.org/t/p/original${item.backdrop_path})`;
+            
+            const btn = document.getElementById('heroPlayBtn');
+            btn.onclick = () => openModal(item);
+            
+            lucide.createIcons();
+        }
+
+        function renderGrid(items) {
+            const grid = document.getElementById('trendingGrid');
+            grid.innerHTML = items.map((item, index) => {
+                if (index === 0) return ''; 
+                const title = item.title || item.name;
+                const poster = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : 'https://via.placeholder.com/500x750?text=No+Img';
+                return `
+                <div onclick='openModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="group cursor-pointer relative">
+                    <div class="poster-card w-full rounded-xl overflow-hidden bg-[#1a1a1a] shadow-lg border border-white/5 transition duration-500 transform group-hover:scale-105 group-hover:border-indigo-500/50 group-hover:shadow-indigo-500/20 relative">
+                        <img src="${poster}" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition duration-500">
+                        <!-- Quality Badge overlay -->
+                        <div class="absolute top-2 right-2 quality-badge px-1.5 py-0.5 rounded text-[10px] font-bold text-white uppercase">HD</div>
+                        
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition duration-300 flex items-end p-4">
+                            <button class="w-full py-2 bg-white text-black text-xs font-bold rounded-lg shadow-lg transform translate-y-2 group-hover:translate-y-0 transition">View Details</button>
+                        </div>
+                    </div>
+                    <h3 class="mt-3 text-sm font-semibold truncate text-gray-300 group-hover:text-white transition">${title}</h3>
+                </div>`;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function filterTrending(type) {
+            document.querySelectorAll('.genre-btn').forEach(b => {
+                b.classList.remove('bg-indigo-600', 'text-white');
+                b.classList.add('bg-[#1a1a1a]', 'border', 'border-white/10', 'text-gray-300');
+            });
+            event.target.classList.remove('bg-[#1a1a1a]', 'border', 'border-white/10', 'text-gray-300');
+            event.target.classList.add('bg-indigo-600', 'text-white');
+
+            if(type === 'all') renderGrid(trendingData);
+            else renderGrid(trendingData.filter(i => i.media_type === type));
+        }
+
+        // --- Modal System ---
+        function openModal(item) {
+            currentModalItem = item;
+            const modal = document.getElementById('infoModal');
+            const content = document.getElementById('modalContent');
+            
+            document.getElementById('modalTitle').innerText = item.title || item.name;
+            document.getElementById('modalOverview').innerText = item.overview || "No overview available.";
+            document.getElementById('modalRating').innerText = `${Math.round(item.vote_average * 10)}% Match`;
+            document.getElementById('modalYear').innerText = (item.release_date || item.first_air_date || '').split('-')[0];
+            const backdrop = item.backdrop_path ? `url(https://image.tmdb.org/t/p/w1280${item.backdrop_path})` : 'none';
+            document.getElementById('modalBackdrop').style.backgroundImage = backdrop;
+            
+            const isTv = item.media_type === 'tv';
+            document.getElementById('modalTvSelectors').classList.toggle('hidden', !isTv);
+            document.getElementById('modalPlayBtn').innerHTML = `<i data-lucide="play" class="w-5 h-5 fill-current"></i> ${isTv ? 'Play Episode' : 'Play Movie'}`;
+            lucide.createIcons();
+
+            const btn = document.getElementById('modalPlayBtn');
+            btn.onclick = () => {
+                const s = isTv ? document.getElementById('modalSeason').value : 1;
+                const e = isTv ? document.getElementById('modalEpisode').value : 1;
+                launchPlayer(item.id, item.media_type, s, e, item.title || item.name);
+            };
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                content.classList.remove('scale-95');
+                content.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('infoModal');
+            const content = document.getElementById('modalContent');
+            modal.classList.add('opacity-0');
+            content.classList.add('scale-95');
+            content.classList.remove('scale-100');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+
+        // --- Player System ---
+        function launchPlayer(id, type, season = 1, episode = 1, title = "Video") {
+            playData = { id, type, season, episode };
+            closeModal();
+            addToHistory(id, type, season, episode);
+            
+            // Smart Title
+            document.title = `Watching: ${title}`;
+            
+            const player = document.getElementById('playerView');
+            player.classList.remove('hidden');
+            player.classList.add('flex');
+            
+            document.getElementById('nextEpBtn').classList.toggle('hidden', type !== 'tv');
+            document.getElementById('nextEpBtn').classList.toggle('flex', type === 'tv');
+
+            reloadVideo();
+        }
+
+        function reloadVideo() {
+            const server = document.getElementById('serverSelect').value;
+            const { id, type, season, episode } = playData;
+            const iframe = document.getElementById('videoFrame');
+            
+            let url = '';
+            switch(server) {
+                case 'vidlink': url = type === 'movie' ? `https://vidlink.pro/movie/${id}` : `https://vidlink.pro/tv/${id}/${season}/${episode}`; break;
+                case 'vidfast': url = type === 'movie' ? `https://vidfast.pro/movie/${id}` : `https://vidfast.pro/tv/${id}/${season}/${episode}`; break;
+                case 'vidsrcto': url = type === 'movie' ? `https://vidsrc.to/embed/movie/${id}` : `https://vidsrc.to/embed/tv/${id}/${season}/${episode}`; break;
+                case 'vidnest': url = type === 'movie' ? `https://vidnest.fun/movie/${id}` : `https://vidnest.fun/tv/${id}/${season}/${episode}`; break;
+                case 'vidsrcme': url = type === 'movie' ? `https://vidsrc.me/embed/movie?tmdb=${id}` : `https://vidsrc.me/embed/tv?tmdb=${id}&season=${season}&episode=${episode}`; break;
+            }
+            iframe.src = url;
+        }
+
+        function closePlayer() {
+            document.getElementById('videoFrame').src = '';
+            document.getElementById('playerView').classList.add('hidden');
+            document.getElementById('playerView').classList.remove('flex');
+            document.title = defaultTitle; // Reset title
+            loadHistory();
+        }
+
+        function nextEpisode() {
+            playData.episode++;
+            launchPlayer(playData.id, playData.type, playData.season, playData.episode, "Next Episode");
+        }
+
+        // --- Search ---
+        let searchTimer;
+        function handleSearch(query) {
+            clearTimeout(searchTimer);
+            const container = document.getElementById('searchResults');
+            if(query.length < 2) { container.classList.add('hidden'); return; }
+            
+            searchTimer = setTimeout(async () => {
+                const res = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${API_KEY}&query=${query}`);
+                const data = await res.json();
+                
+                container.innerHTML = data.results.slice(0,6).map(item => {
+                    if(item.media_type === 'person') return '';
+                    const img = item.poster_path ? `https://image.tmdb.org/t/p/w92${item.poster_path}` : 'https://via.placeholder.com/92x138';
+                    return `
+                    <div onclick='openModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' class="flex gap-4 p-3 hover:bg-white/5 cursor-pointer transition border-b border-white/5 last:border-0 group">
+                        <img src="${img}" class="w-12 h-16 object-cover rounded shadow-lg group-hover:scale-105 transition">
+                        <div>
+                            <div class="font-bold text-sm text-white group-hover:text-indigo-400 transition">${item.title || item.name}</div>
+                            <div class="text-xs text-gray-500 capitalize mt-1 flex items-center gap-2">
+                                <span class="px-1.5 py-0.5 bg-white/10 rounded">${item.media_type}</span>
+                                <span>${(item.release_date||'').split('-')[0]}</span>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+                container.classList.remove('hidden');
+            }, 300);
+        }
+
+        // --- Manual Input ---
+        function toggleManualType(type) {
+            manualType = type;
+            const mBtn = document.getElementById('manualMovieBtn');
+            const tBtn = document.getElementById('manualTvBtn');
+            const fields = document.getElementById('manualTvFields');
+            
+            if(type === 'movie') {
+                mBtn.classList.add('bg-indigo-600', 'text-white'); mBtn.classList.remove('text-gray-400');
+                tBtn.classList.remove('bg-indigo-600', 'text-white'); tBtn.classList.add('text-gray-400');
+                fields.classList.add('hidden');
+            } else {
+                tBtn.classList.add('bg-indigo-600', 'text-white'); tBtn.classList.remove('text-gray-400');
+                mBtn.classList.remove('bg-indigo-600', 'text-white'); mBtn.classList.add('text-gray-400');
+                fields.classList.remove('hidden');
+            }
+        }
+
+        function manualPlay() {
+            const id = document.getElementById('manualId').value;
+            if(!id) return;
+            const s = document.getElementById('manualS').value || 1;
+            const e = document.getElementById('manualE').value || 1;
+            document.getElementById('manualInputModal').classList.add('hidden');
+            launchPlayer(id, manualType, s, e, "Stream");
+        }
+
+        // --- Utils ---
+        function checkUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            if(params.get('play')) launchPlayer(params.get('play'), params.get('type'), params.get('s')||1, params.get('e')||1, "Stream");
+        }
+
+        function shareContent() {
+            if(!currentModalItem) return;
+            const url = `${window.location.origin}${window.location.pathname}?play=${currentModalItem.id}&type=${currentModalItem.media_type}`;
+            navigator.clipboard.writeText(url);
+            alert("Shareable Link Copied!");
+        }
+
+        function scrollToGrid() { 
+            const el = document.getElementById('contentArea');
+            el.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function addToHistory(id, type, s, e) {
+            let hist = JSON.parse(localStorage.getItem('hist') || '[]');
+            hist = hist.filter(h => h.id !== id);
+            hist.unshift({ id, type, s, e });
+            localStorage.setItem('hist', JSON.stringify(hist.slice(0,10)));
+        }
+
+        function loadHistory() {
+            const hist = JSON.parse(localStorage.getItem('hist') || '[]');
+            const el = document.getElementById('historySection');
+            const grid = document.getElementById('historyGrid');
+            if(!hist.length) { el.classList.add('hidden'); return; }
+            
+            el.classList.remove('hidden');
+            grid.innerHTML = hist.map(h => `
+                <div onclick="launchPlayer('${h.id}','${h.type}','${h.s}','${h.e}','Resume')" class="min-w-[160px] cursor-pointer group">
+                    <div class="aspect-video bg-white/5 rounded-xl flex items-center justify-center border border-white/5 group-hover:border-indigo-500 transition relative overflow-hidden shadow-lg">
+                        <i data-lucide="play" class="w-10 h-10 text-white/50 group-hover:text-white transition transform group-hover:scale-110"></i>
+                    </div>
+                    <div class="mt-2 text-xs font-mono text-gray-400 group-hover:text-white transition">
+                        ID: ${h.id} <span class="text-indigo-400">${h.type=='tv'?`S${h.s}:E${h.e}`:''}</span>
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function resetApp() { window.location.href = window.location.pathname; }
+    </script>
+</body>
+</html>
