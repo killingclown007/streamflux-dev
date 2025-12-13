@@ -340,7 +340,7 @@
     </div>
 
     <!-- PLAYER OVERLAY -->
-    <div id="playerView" class="fixed inset-0 z-[70] bg-black hidden flex-col animate-fade-in" role="dialog" aria-modal="true">
+    <div id="playerView" class="fixed inset-0 z-[70] bg-black hidden flex-col animate-fade-in touch-none overscroll-none" role="dialog" aria-modal="true">
         <div class="h-16 bg-[#0a0a0a] flex items-center justify-between px-4 border-b border-white/5">
             <button onclick="closePlayer()" class="flex items-center gap-2 text-gray-300 hover:text-white bg-white/10 px-4 py-2 rounded-full text-sm font-medium transition">
                 <i data-lucide="arrow-left" class="w-4 h-4"></i> <span class="hidden sm:inline">Back to Browse</span>
@@ -819,6 +819,8 @@
             
             // Smart Title
             document.title = `Watching: ${title}`;
+
+            document.body.style.overflow = 'hidden';
             
             const player = document.getElementById('playerView');
             player.classList.remove('hidden');
@@ -862,7 +864,8 @@
             document.getElementById('videoFrame').src = '';
             document.getElementById('playerView').classList.add('hidden');
             document.getElementById('playerView').classList.remove('flex');
-            document.title = defaultTitle; 
+            document.title = defaultTitle;
+            document.body.style.overflow = ''; 
             loadHistory();
         }
 
