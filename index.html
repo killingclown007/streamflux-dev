@@ -218,7 +218,15 @@
                         <i data-lucide="sparkles" class="w-4 h-4"></i> Surprise Me
                     </button>
                 </div>
-                <div id="genreFilters" class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2"></div>
+                <div class="relative">
+                    <button id="genreScrollLeft" onclick="scrollGenres(-1)" class="hidden absolute left-0 top-1/2 -translate-y-1/2 bg-black/40 border border-white/10 rounded-full p-2 shadow-lg backdrop-blur hover:bg-white/10 transition z-10">
+                        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    </button>
+                    <div id="genreFilters" class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 px-8"></div>
+                    <button id="genreScrollRight" onclick="scrollGenres(1)" class="hidden absolute right-0 top-1/2 -translate-y-1/2 bg-black/40 border border-white/10 rounded-full p-2 shadow-lg backdrop-blur hover:bg-white/10 transition">
+                        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Data backup/restore -->
@@ -591,6 +599,7 @@
             container.innerHTML = buttonsHtml.join('');
             const allBtn = container.querySelector('button[data-genre="all"]');
             if (allBtn) setGenreFilter('all', allBtn);
+            setupGenreScrollHint();
         }
 
         function setupInfiniteScroll() {
@@ -603,6 +612,31 @@
             if (nearBottom) {
                 loadTrendingPage(trendingPage + 1, false);
             }
+        }
+
+        function scrollGenres(direction = 1) {
+            const container = document.getElementById('genreFilters');
+            if (!container) return;
+            container.scrollBy({ left: direction * container.clientWidth * 0.8, behavior: 'smooth' });
+        }
+
+        function setupGenreScrollHint() {
+            const container = document.getElementById('genreFilters');
+            const btnR = document.getElementById('genreScrollRight');
+            const btnL = document.getElementById('genreScrollLeft');
+            if (!container || !btnR || !btnL) return;
+            const update = () => {
+                const hasOverflow = container.scrollWidth > container.clientWidth + 8;
+                btnR.classList.toggle('hidden', !hasOverflow);
+                btnL.classList.toggle('hidden', !hasOverflow);
+                const atEnd = container.scrollLeft + container.clientWidth >= container.scrollWidth - 8;
+                const atStart = container.scrollLeft <= 8;
+                btnR.classList.toggle('opacity-40', atEnd);
+                btnL.classList.toggle('opacity-40', atStart);
+            };
+            container.addEventListener('scroll', update);
+            window.addEventListener('resize', update);
+            update();
         }
 
         function surpriseMe() {
