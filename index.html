@@ -187,6 +187,14 @@
                         <button onclick="scrollToGrid()" class="px-8 py-4 bg-white/10 text-white border border-white/10 rounded-xl font-semibold text-lg flex items-center gap-3 hover:bg-white/20 transition backdrop-blur-md">
                             <i data-lucide="layout-grid" class="w-6 h-6"></i> Browse
                         </button>
+                        <div class="flex items-center gap-2 bg-black/30 border border-white/10 rounded-full px-3 py-2 backdrop-blur">
+                            <button onclick="prevHero()" class="p-2 rounded-full hover:bg-white/10 transition" aria-label="Previous hero">
+                                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="nextHero()" class="p-2 rounded-full hover:bg-white/10 transition" aria-label="Next hero">
+                                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -198,11 +206,16 @@
         <div id="contentArea" class="relative z-20 w-full max-w-[1920px] mx-auto px-6 md:px-12 py-8">
             
             <!-- Filters -->
-            <div class="flex items-center gap-3 mb-12 overflow-x-auto no-scrollbar pb-2">
-                <span class="text-gray-500 text-sm font-bold mr-2 uppercase tracking-wider whitespace-nowrap">Explore:</span>
-                <button onclick="filterTrending('all')" class="genre-btn active px-6 py-2.5 rounded-full text-sm font-bold bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 transition whitespace-nowrap hover:scale-105">All</button>
-                <button onclick="filterTrending('movie')" class="genre-btn px-6 py-2.5 rounded-full text-sm font-bold bg-[#1a1a1a] border border-white/10 hover:bg-white/10 hover:border-white/30 transition text-gray-300 whitespace-nowrap">Movies</button>
-                <button onclick="filterTrending('tv')" class="genre-btn px-6 py-2.5 rounded-full text-sm font-bold bg-[#1a1a1a] border border-white/10 hover:bg-white/10 hover:border-white/30 transition text-gray-300 whitespace-nowrap">TV Shows</button>
+            <div class="flex flex-col gap-3 mb-12">
+                <div class="flex items-center gap-3 overflow-x-auto no-scrollbar pb-2">
+                    <span class="text-gray-500 text-sm font-bold mr-2 uppercase tracking-wider whitespace-nowrap">Explore:</span>
+                    <div id="typeFilters" class="flex items-center gap-2">
+                        <button onclick="setTypeFilter('all', this)" class="genre-btn px-6 py-2.5 rounded-full text-sm font-bold bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 transition whitespace-nowrap hover:scale-105">All</button>
+                        <button onclick="setTypeFilter('movie', this)" class="genre-btn px-6 py-2.5 rounded-full text-sm font-bold bg-[#1a1a1a] border border-white/10 hover:bg-white/10 hover:border-white/30 transition text-gray-300 whitespace-nowrap">Movies</button>
+                        <button onclick="setTypeFilter('tv', this)" class="genre-btn px-6 py-2.5 rounded-full text-sm font-bold bg-[#1a1a1a] border border-white/10 hover:bg-white/10 hover:border-white/30 transition text-gray-300 whitespace-nowrap">TV Shows</button>
+                    </div>
+                </div>
+                <div id="genreFilters" class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2"></div>
             </div>
 
             <!-- History Section -->
@@ -377,6 +390,14 @@
         lucide.createIcons();
         const API_KEY = '84259f99204eeb7d45c7e3d8e36c6123'; // REMINDER: Replace with your own key
         let trendingData = [];
+        let trendingPage = 1;
+        let totalTrendingPages = 1;
+        let isTrendingLoading = false;
+        let activeTypeFilter = 'all';
+        let activeGenreFilter = 'all';
+        let heroItems = [];
+        let heroIndex = 0;
+        let heroTimer = null;
         let currentModalItem = null;
         let currentTrailerKey = null;
         let playData = { id: '', type: 'movie', season: 1, episode: 1 };
@@ -386,21 +407,62 @@
 
         // --- Init ---
         window.onload = async () => {
-            await loadTrending();
+            await loadTrendingPage(1, true);
+            await loadGenres();
+            setupInfiniteScroll();
             checkUrlParams();
             loadHistory();
         };
 
         // --- Core Logic ---
-        async function loadTrending() {
+        async function loadTrendingPage(page = 1, resetHero = false) {
+            if (isTrendingLoading || page > totalTrendingPages) return;
+            isTrendingLoading = true;
             try {
-                const res = await fetch(`https://api.themoviedb.org/3/trending/all/day?api_key=${API_KEY}`);
+                const res = await fetch(`https://api.themoviedb.org/3/trending/all/day?api_key=${API_KEY}&page=${page}`);
                 const data = await res.json();
-                trendingData = data.results.filter(i => i.media_type !== 'person');
-                
-                setupHero(trendingData[0]); 
-                renderGrid(trendingData);
+                totalTrendingPages = data.total_pages || totalTrendingPages;
+                const results = (data.results || []).filter(i => i.media_type !== 'person');
+                trendingPage = page;
+                trendingData = page === 1 ? results : [...trendingData, ...results];
+                applyFilters(resetHero || page === 1);
             } catch (e) { console.error("API Error:", e); }
+            finally { isTrendingLoading = false; }
+        }
+
+        function setHeroItems(items = []) {
+            const movieFirst = items.filter(i => i.media_type === 'movie');
+            const pool = movieFirst.length ? movieFirst : items;
+            heroItems = pool.slice(0, 5);
+            heroIndex = 0;
+            renderHeroFromSlider();
+            restartHeroAutoplay();
+        }
+
+        function renderHeroFromSlider() {
+            if (!heroItems.length) return;
+            const item = heroItems[heroIndex % heroItems.length];
+            setupHero(item);
+        }
+
+        function restartHeroAutoplay() {
+            if (heroTimer) clearInterval(heroTimer);
+            if (!heroItems.length) return;
+            heroTimer = setInterval(nextHero, 6000);
+        }
+
+        function nextHero() {
+            if (!heroItems.length) return;
+            heroIndex = (heroIndex + 1) % heroItems.length;
+            renderHeroFromSlider();
+            restartHeroAutoplay();
+        }
+
+        function prevHero() {
+            if (!heroItems.length) return;
+            heroIndex = (heroIndex - 1 + heroItems.length) % heroItems.length;
+            renderHeroFromSlider();
+            restartHeroAutoplay();
         }
 
         function setupHero(item) {
@@ -445,16 +507,76 @@
             lucide.createIcons();
         }
 
-        function filterTrending(type) {
-            document.querySelectorAll('.genre-btn').forEach(b => {
-                b.classList.remove('bg-indigo-600', 'text-white');
-                b.classList.add('bg-[#1a1a1a]', 'border', 'border-white/10', 'text-gray-300');
-            });
-            event.target.classList.remove('bg-[#1a1a1a]', 'border', 'border-white/10', 'text-gray-300');
-            event.target.classList.add('bg-indigo-600', 'text-white');
+        function setTypeFilter(type, el) {
+            activeTypeFilter = type;
+            updateActiveButtons('typeFilters', el);
+            applyFilters(true);
+        }
 
-            if(type === 'all') renderGrid(trendingData);
-            else renderGrid(trendingData.filter(i => i.media_type === type));
+        function setGenreFilter(genreId, el) {
+            activeGenreFilter = genreId;
+            updateActiveButtons('genreFilters', el);
+            applyFilters(true);
+        }
+
+        function updateActiveButtons(containerId, activeEl) {
+            const buttons = document.querySelectorAll(`#${containerId} .genre-btn`);
+            buttons.forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('bg-[#1a1a1a]', 'border', 'border-white/10', 'text-gray-300');
+            });
+            if (activeEl) {
+                activeEl.classList.add('bg-indigo-600', 'text-white');
+                activeEl.classList.remove('bg-[#1a1a1a]', 'border', 'border-white/10', 'text-gray-300');
+            }
+        }
+
+        function applyFilters(resetHero = true) {
+            const filtered = trendingData.filter(item => {
+                const typeMatch = activeTypeFilter === 'all' || item.media_type === activeTypeFilter;
+                const genreMatch = activeGenreFilter === 'all' || (item.genre_ids || []).includes(Number(activeGenreFilter));
+                return typeMatch && genreMatch;
+            });
+            renderGrid(filtered);
+            const heroSource = (resetHero ? (filtered.length ? filtered : trendingData) : heroItems.length ? heroItems : trendingData);
+            if (heroSource.length && (resetHero || !heroItems.length)) setHeroItems(heroSource);
+        }
+
+        async function loadGenres() {
+            const container = document.getElementById('genreFilters');
+            if (!container) return;
+            container.innerHTML = `<button class="genre-btn px-4 py-2 rounded-full text-sm font-semibold bg-[#1a1a1a] border border-white/10 text-gray-400" disabled>Loading genres...</button>`;
+            const genreMap = new Map();
+            const kinds = ['movie', 'tv'];
+            for (const kind of kinds) {
+                try {
+                    const res = await fetch(`https://api.themoviedb.org/3/genre/${kind}/list?api_key=${API_KEY}`);
+                    const data = await res.json();
+                    (data.genres || []).forEach(g => genreMap.set(g.id, g.name));
+                } catch (err) {
+                    console.warn('Genre load failed for', kind, err);
+                }
+            }
+            const genres = Array.from(genreMap.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+            const buttonsHtml = [
+                `<button data-genre="all" onclick="setGenreFilter('all', this)" class="genre-btn px-4 py-2 rounded-full text-sm font-semibold bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 transition whitespace-nowrap hover:scale-105">All Genres</button>`,
+                ...genres.map(([id, name]) => `<button data-genre="${id}" onclick="setGenreFilter('${id}', this)" class="genre-btn px-4 py-2 rounded-full text-sm font-semibold bg-[#1a1a1a] border border-white/10 hover:bg-white/10 hover:border-white/30 transition text-gray-300 whitespace-nowrap">${escapeHtml(name)}</button>`)
+            ];
+            container.innerHTML = buttonsHtml.join('');
+            const allBtn = container.querySelector('button[data-genre="all"]');
+            if (allBtn) setGenreFilter('all', allBtn);
+        }
+
+        function setupInfiniteScroll() {
+            window.addEventListener('scroll', handleInfiniteScroll);
+        }
+
+        function handleInfiniteScroll() {
+            if (isTrendingLoading || trendingPage >= totalTrendingPages) return;
+            const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 800;
+            if (nearBottom) {
+                loadTrendingPage(trendingPage + 1, false);
+            }
         }
 
         // --- Modal System ---
@@ -934,7 +1056,7 @@ function dismissNote() {
             <div class="flex-1">
                 <h4 class="font-bold text-white mb-1">Streamer Tip</h4>
                 <p class="text-xs text-gray-300 leading-relaxed mb-3">
-                    For the smoothest experience, we recommend using <span class="text-white font-bold">UBlock Origin</span> or the <span class="text-white font-bold">Thorium Browser</span>.
+                    For the smoothest experience, we recommend using <span class="text-white font-bold">UBlock Origin Extension</span> or the <span class="text-white font-bold">Thorium Browser</span>.
                 </p>
                 <div class="flex items-center gap-3">
                     <span class="text-[10px] font-bold text-yellow-500/80 uppercase tracking-wider border border-yellow-500/20 px-2 py-1 rounded bg-yellow-500/5">
