@@ -343,6 +343,7 @@
                     <option value="vidnest">Pluto (Clean)</option>
                     <option value="vidsrcme">Mars (Backup)</option>
                     <option value="2embed">Mercury (Alternative)</option>
+                    <option value="vidsrcxyz">Aliens (Fast)</option>
                 </select>
             </div>
         </div>
@@ -725,6 +726,11 @@
                     url = type === 'movie' 
                         ? `https://www.2embed.cc/embed/${id}` 
                         : `https://www.2embed.cc/embedtv/${id}?s=${season}&e=${episode}`; 
+                    break;
+                case 'vidsrcxyz':
+                    url = type === 'movie'
+                        ? `https://vidsrc.xyz/embed/movie?tmdb=${id}`
+                        : `https://vidsrc.xyz/embed/tv?tmdb=${id}&season=${season}&episode=${episode}`;
                     break;
             }
             iframe.src = url;
