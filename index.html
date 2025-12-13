@@ -93,6 +93,18 @@
         #infoModal.modal-open { overflow: hidden; }
         /* modal & episode adjustments remain here */
         /* Episode card styles removed to revert episode detail UI */
+
+        /* Modal background trailer */
+        .modal-backdrop-video { pointer-events: none; opacity: 0; transition: opacity 0.8s ease; }
+        .modal-backdrop-video iframe { width: 100%; height: 100%; }
+        .modal-backdrop-video.show { opacity: 1; }
+        .modal-backdrop-video::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.35) 25%, rgba(0,0,0,0.25) 50%, rgba(0,0,0,0.4) 100%);
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col modern-scrollbar selection:bg-indigo-500 selection:text-white">
@@ -132,9 +144,9 @@
                     <i data-lucide="terminal" class="w-5 h-5 text-gray-200"></i>
                 </button>
 
-                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 border border-white/10 cursor-pointer hover:scale-105 transition">
-                    <i data-lucide="user" class="w-5 h-5 text-white"></i>
-                </div>
+                <button onclick="showIdentity()" class="p-2.5 bg-white/10 hover:bg-white/20 rounded-full transition backdrop-blur-md border border-white/5" title="Show IP & Location" aria-label="User Info">
+                    <i data-lucide="user" class="w-5 h-5 text-gray-200"></i>
+                </button>
             </div>
         </div>
     </nav>
@@ -240,6 +252,14 @@
                 <input type="file" id="importFile" accept="application/json" class="hidden" onchange="handleImport(event)">
             </div>
 
+            <!-- Watchlist Section -->
+            <div id="watchlistSection" class="mb-16 hidden">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-3 text-white">
+                    <div class="w-1.5 h-6 bg-emerald-500 rounded-full"></div> Watchlist
+                </h2>
+                <div id="watchlistGrid" class="flex gap-5 overflow-x-auto modern-scrollbar pb-6"></div>
+            </div>
+
             <!-- History Section -->
             <div id="historySection" class="mb-16 hidden">
                 <h2 class="text-2xl font-bold mb-6 flex items-center gap-3 text-white">
@@ -281,6 +301,21 @@
 
     <!-- Toasts -->
     <div id="toastContainer" class="fixed bottom-6 left-6 z-[120] flex flex-col gap-3 pointer-events-none"></div>
+    <div id="identityBadge" class="fixed top-20 right-4 z-[120] bg-[#0b0b0b] border border-white/10 rounded-lg px-3 py-2 text-xs text-white shadow-lg hidden min-w-[160px]">
+        <div class="font-bold text-[10px] text-gray-300 uppercase tracking-wider mb-0.5">Your Node</div>
+        <div id="identityContent" class="text-xs text-white">Fetching...</div>
+    </div>
+    <div id="contextMenu" class="hidden fixed z-[130] w-56 bg-[#0b0b0b] border border-white/10 rounded-xl shadow-2xl overflow-hidden">
+        <button onclick="contextPlay()" class="w-full text-left px-4 py-3 text-sm text-white hover:bg-white/10 flex items-center gap-2">
+            <i data-lucide="play" class="w-4 h-4"></i> Play
+        </button>
+        <button onclick="contextAddWatchlist()" class="w-full text-left px-4 py-3 text-sm text-white hover:bg-white/10 flex items-center gap-2">
+            <i data-lucide="bookmark-plus" class="w-4 h-4"></i> Add to Watchlist
+        </button>
+        <button onclick="contextCopyLink()" class="w-full text-left px-4 py-3 text-sm text-white hover:bg-white/10 flex items-center gap-2">
+            <i data-lucide="link" class="w-4 h-4"></i> Copy Link
+        </button>
+    </div>
 
     <!-- INFO MODAL -->
     <div id="infoModal" class="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md hidden items-center justify-center p-4 transition-opacity duration-300 opacity-0" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -293,9 +328,12 @@
 
             <!-- Modal Layout -->
             <div class="flex flex-col md:flex-row h-auto max-h-[90vh]">
-                <div id="modalLeft" class="w-full md:w-[45%] h-56 md:h-auto relative">
+                <div id="modalLeft" class="w-full md:w-[45%] h-56 md:h-auto relative overflow-hidden">
                     <div id="modalBackdrop" class="absolute inset-0 bg-cover bg-center"></div>
-                    <div class="absolute inset-0 bg-gradient-to-t from-[#121212] md:bg-gradient-to-r md:from-transparent md:to-[#121212] z-10"></div>
+                    <div id="modalBackdropVideo" class="modal-backdrop-video absolute inset-0 z-10">
+                        <iframe id="modalBackdropVideoFrame" src="" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#121212] md:bg-gradient-to-r md:from-transparent md:to-[#121212] z-20"></div>
                 </div>
 
                 <div id="modalRight" class="flex-1 p-8 md:p-12 bg-[#121212] overflow-y-auto relative z-20 modern-scrollbar">
@@ -316,8 +354,16 @@
                             <button id="modalPlayBtn" class="flex-1 bg-white text-black hover:bg-gray-200 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition transform active:scale-[0.98] shadow-lg shadow-white/10">
                                 <i data-lucide="play" class="w-5 h-5 fill-current"></i> Play Movie
                             </button>
+                            <button id="watchlistBtn" onclick="toggleWatchlist()" class="px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition flex items-center gap-2 text-sm font-semibold">
+                                <i data-lucide="bookmark-plus" class="w-5 h-5 text-emerald-400"></i>
+                                <span id="watchlistBtnLabel">Add</span>
+                            </button>
                             <button onclick="shareContent()" class="px-5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition" title="Copy Link">
                                 <i data-lucide="share-2" class="w-5 h-5 text-gray-300"></i>
+                            </button>
+                            <button id="collectionBtn" onclick="viewCollection()" class="hidden px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition flex items-center gap-2 text-sm font-semibold" title="View Collection">
+                                <i data-lucide="film" class="w-5 h-5 text-indigo-400"></i>
+                                <span>View Collection</span>
                             </button>
                             <button id="modalTrailerBtn" onclick="toggleTrailer()" class="px-5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition flex items-center gap-2" title="Watch Trailer" aria-pressed="false" style="display:none">
                                 <i data-lucide="youtube" class="w-5 h-5 text-red-400"></i>
@@ -353,6 +399,14 @@
                     <!-- Trailer container (hidden until a trailer is available) -->
                     <div id="modalTrailerContainer" class="mt-6 rounded-xl overflow-hidden bg-black/60 border border-white/5 hidden" style="aspect-ratio:16/9">
                         <iframe id="modalTrailerFrame" src="" class="w-full h-full" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+                    </div>
+
+                    <div id="collectionSection" class="mt-8 hidden">
+                        <div class="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
+                            <i data-lucide="layers" class="w-4 h-4"></i>
+                            Collection
+                        </div>
+                        <div id="collectionGrid" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
                     </div>
 
                     <div id="modalRecommendedSection" class="mt-8">
@@ -429,12 +483,16 @@
         let heroTimer = null;
         let focusIndex = 0;
         let currentModalItem = null;
+        let currentCollection = null;
         let currentTrailerKey = null;
+        let contextItem = null;
+        let identityTimer = null;
         let playData = { id: '', type: 'movie', season: 1, episode: 1 };
         let manualType = 'movie';
         const defaultTitle = "StreamFlux - Immersive Cinema";
         let wakeLock = null;
         const SERVER_PREF_KEY = 'sf-preferred-server';
+        const WATCHLIST_KEY = 'sf-watchlist';
 
 
         // --- Init ---
@@ -444,11 +502,14 @@
             setupInfiniteScroll();
             checkUrlParams();
             loadHistory();
+            loadWatchlist();
             setupKeyboardNavigation();
             hydratePreferredServer();
-            document.addEventListener('contextmenu', (e) => {
-                if (e.target.tagName === 'IMG') { e.preventDefault(); }
-            });
+            document.addEventListener('contextmenu', () => hideContextMenu());
+            document.addEventListener('click', () => hideContextMenu());
+            document.addEventListener('keydown', (e) => { if(e.key === 'Escape') hideContextMenu(); });
+            window.addEventListener('resize', () => hideContextMenu());
+            window.addEventListener('scroll', () => hideContextMenu(), true);
         };
 
         // --- Core Logic ---
@@ -528,11 +589,12 @@
                 if (index === 0) return ''; 
                 const title = escapeHtml(item.title || item.name || 'Untitled');
                 const poster = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : 'https://via.placeholder.com/500x750?text=No+Img';
+                const itemJson = JSON.stringify(item).replace(/'/g, "&#39;");
                 const cardIndex = cardCounter++;
                 return `
-                <div role="button" tabindex="0" data-card-index="${cardIndex}" onclick='openModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' onkeydown='if(event.key==="Enter"){openModal(${JSON.stringify(item).replace(/'/g, "&#39;")})}' class="group cursor-pointer relative">
+                <div role="button" tabindex="0" data-card-index="${cardIndex}" onclick='openModal(${itemJson})' onkeydown='if(event.key==="Enter"){openModal(${itemJson})}' oncontextmenu='return showContextMenu(event, ${itemJson})' class="group cursor-pointer relative">
                     <div class="poster-card w-full rounded-xl overflow-hidden bg-[#1a1a1a] shadow-lg border border-white/5 transition duration-500 transform group-hover:scale-105 group-hover:border-indigo-500/50 group-hover:shadow-indigo-500/20 relative">
-                        <img src="${poster}" loading="lazy" alt="${title} Poster" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition duration-500" oncontextmenu="return false">
+                        <img src="${poster}" loading="lazy" alt="${title} Poster" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition duration-500" style="view-transition-name: poster-${item.id || cardIndex};">
                         <!-- Quality Badge overlay -->
                         <div class="absolute top-2 right-2 quality-badge px-1.5 py-0.5 rounded text-[10px] font-bold text-white uppercase">HD</div>
                         
@@ -654,10 +716,141 @@
             showToast("Picked a great title for you!", "success");
         }
 
+        // --- Watchlist ---
+        function getWatchlist() {
+            try { return JSON.parse(localStorage.getItem(WATCHLIST_KEY) || '[]'); }
+            catch { return []; }
+        }
+
+        function saveWatchlist(list) {
+            localStorage.setItem(WATCHLIST_KEY, JSON.stringify(list.slice(0,50)));
+        }
+
+        function isInWatchlist(id, type) {
+            return getWatchlist().some(w => w.id == id && w.type === type);
+        }
+
+        function addToWatchlist(item) {
+            if(!item || !item.id) return;
+            const existing = getWatchlist();
+            const inList = existing.some(w => w.id == item.id && w.type === (item.media_type || item.type));
+            if(inList) { showToast("Already in Watchlist", "info"); return; }
+            const list = existing.filter(w => !(w.id == item.id && w.type === (item.media_type || item.type)));
+            list.unshift({
+                id: item.id,
+                type: item.media_type || item.type || 'movie',
+                title: item.title || item.name || 'Untitled',
+                poster_path: item.poster_path || item.backdrop_path || '',
+                backdrop_path: item.backdrop_path || item.poster_path || '',
+                media_type: item.media_type || item.type || 'movie'
+            });
+            saveWatchlist(list);
+            loadWatchlist();
+            if(currentModalItem && currentModalItem.id == item.id) syncWatchlistButton();
+            showToast("Added to Watchlist", "success");
+        }
+
+        function removeFromWatchlist(id, type) {
+            saveWatchlist(getWatchlist().filter(w => !(w.id == id && w.type === type)));
+            loadWatchlist();
+            if(currentModalItem && currentModalItem.id == id) syncWatchlistButton();
+            showToast("Removed from Watchlist", "info");
+        }
+
+        function toggleWatchlist() {
+            if(!currentModalItem) return;
+            const type = currentModalItem.media_type || currentModalItem.type;
+            if(isInWatchlist(currentModalItem.id, type)) {
+                removeFromWatchlist(currentModalItem.id, type);
+            } else {
+                addToWatchlist(currentModalItem);
+            }
+            syncWatchlistButton();
+        }
+
+        function syncWatchlistButton() {
+            const btn = document.getElementById('watchlistBtn');
+            const label = document.getElementById('watchlistBtnLabel');
+            if(!btn || !label || !currentModalItem) return;
+            const type = currentModalItem.media_type || currentModalItem.type;
+            const inList = isInWatchlist(currentModalItem.id, type);
+            label.innerText = inList ? 'In Watchlist' : 'Add';
+            btn.classList.toggle('bg-emerald-600', inList);
+            btn.classList.toggle('text-white', inList);
+        }
+
+        function loadWatchlist() {
+            const list = getWatchlist();
+            const section = document.getElementById('watchlistSection');
+            const grid = document.getElementById('watchlistGrid');
+            if(!section || !grid) return;
+            if(!list.length) { section.classList.add('hidden'); grid.innerHTML = ''; return; }
+            section.classList.remove('hidden');
+            grid.innerHTML = list.map(item => {
+                const safeItem = { ...item, media_type: item.media_type || item.type };
+                const img = item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : (item.backdrop_path ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}` : 'https://via.placeholder.com/300x169?text=No+Image');
+                const title = escapeHtml(item.title || item.name || `ID:${item.id}`);
+                const itemJson = JSON.stringify(safeItem).replace(/'/g, "&#39;");
+                return `
+                <div class="min-w-[160px] cursor-pointer group" onclick='openModal(${itemJson})' oncontextmenu='return showContextMenu(event, ${itemJson})'>
+                    <div class="aspect-video bg-white/5 rounded-xl flex items-center justify-center border border-white/5 group-hover:border-emerald-500 transition relative overflow-hidden shadow-lg">
+                        <img src="${img}" alt="${title}" class="absolute inset-0 w-full h-full object-cover" loading="lazy" style="view-transition-name: poster-${item.id}">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+                        <i data-lucide="bookmark" class="w-10 h-10 text-white/60 group-hover:text-white transition transform group-hover:scale-110 z-10"></i>
+                    </div>
+                    <div class="mt-2 text-sm font-medium text-white group-hover:text-emerald-300 transition">${title}</div>
+                </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        // --- Context Menu ---
+        function showContextMenu(event, item) {
+            const menu = document.getElementById('contextMenu');
+            if(!menu) return true;
+            event.preventDefault();
+            contextItem = item;
+            const { clientX, clientY } = event;
+            const menuWidth = 224;
+            const menuHeight = 144;
+            const posX = (clientX + menuWidth > window.innerWidth) ? (window.innerWidth - menuWidth - 10) : clientX;
+            const posY = (clientY + menuHeight > window.innerHeight) ? (window.innerHeight - menuHeight - 10) : clientY;
+            menu.style.left = `${posX}px`;
+            menu.style.top = `${posY}px`;
+            menu.classList.remove('hidden');
+            return false;
+        }
+
+        function hideContextMenu() {
+            const menu = document.getElementById('contextMenu');
+            if(menu) menu.classList.add('hidden');
+            contextItem = null;
+        }
+
+        function contextPlay() {
+            if(!contextItem) return;
+            openModal(contextItem);
+            hideContextMenu();
+        }
+
+        function contextAddWatchlist() {
+            if(!contextItem) return;
+            addToWatchlist(contextItem);
+            hideContextMenu();
+        }
+
+        function contextCopyLink() {
+            if(!contextItem) return;
+            copyLinkForItem(contextItem);
+            hideContextMenu();
+        }
+
         // Backup / Restore
         function exportData() {
             const payload = {
-                hist: JSON.parse(localStorage.getItem('hist') || '[]')
+                hist: JSON.parse(localStorage.getItem('hist') || '[]'),
+                watchlist: getWatchlist()
             };
             const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -676,13 +869,18 @@
             reader.onload = (evt) => {
                 try {
                     const data = JSON.parse(evt.target.result || '{}');
+                    let restored = false;
                     if(Array.isArray(data.hist)) {
                         localStorage.setItem('hist', JSON.stringify(data.hist.slice(0,10)));
                         loadHistory();
-                        showToast("History restored", "success");
-                    } else {
-                        showToast("Invalid backup file", "error");
+                        restored = true;
                     }
+                    if(Array.isArray(data.watchlist)) {
+                        saveWatchlist(data.watchlist);
+                        loadWatchlist();
+                        restored = true;
+                    }
+                    showToast(restored ? "Backup restored" : "Invalid backup file", restored ? "success" : "error");
                 } catch (err) {
                     showToast("Import failed", "error");
                 }
@@ -693,50 +891,63 @@
 
         // --- Modal System ---
         function openModal(item) {
-            currentModalItem = item;
-            const modal = document.getElementById('infoModal');
-            const content = document.getElementById('modalContent');
-            
-            document.getElementById('modalTitle').innerText = item.title || item.name;
-            document.getElementById('modalOverview').innerText = item.overview || "No overview available.";
-            document.getElementById('modalRating').innerText = `${Math.round(item.vote_average * 10)}% Match`;
-            document.getElementById('modalYear').innerText = (item.release_date || item.first_air_date || '').split('-')[0];
-            const backdrop = item.backdrop_path ? `url(https://image.tmdb.org/t/p/w1280${item.backdrop_path})` : 'none';
-            document.getElementById('modalBackdrop').style.backgroundImage = backdrop;
-            
-            const isTv = item.media_type === 'tv';
-            document.getElementById('modalPlayBtn').innerHTML = `<i data-lucide="play" class="w-5 h-5 fill-current"></i> ${isTv ? 'Play Episode' : 'Play Movie'}`;
-            lucide.createIcons();
+            const deducedType = item.media_type || item.type || (item.first_air_date ? 'tv' : 'movie');
+            const safeItem = { ...item, media_type: deducedType };
+            const runOpen = () => {
+                currentModalItem = safeItem;
+                const modal = document.getElementById('infoModal');
+                const content = document.getElementById('modalContent');
+                
+                document.getElementById('modalTitle').innerText = safeItem.title || safeItem.name;
+                document.getElementById('modalOverview').innerText = safeItem.overview || "No overview available.";
+                document.getElementById('modalRating').innerText = `${Math.round((safeItem.vote_average || 0) * 10)}% Match`;
+                document.getElementById('modalYear').innerText = (safeItem.release_date || safeItem.first_air_date || '').split('-')[0];
+                const backdrop = safeItem.backdrop_path ? `url(https://image.tmdb.org/t/p/w1280${safeItem.backdrop_path})` : 'none';
+                const backdropEl = document.getElementById('modalBackdrop');
+                if(backdropEl) {
+                    backdropEl.style.backgroundImage = backdrop;
+                    backdropEl.style.viewTransitionName = `poster-${safeItem.id || 'modal'}`;
+                }
+                
+                const isTv = safeItem.media_type === 'tv';
+                document.getElementById('modalPlayBtn').innerHTML = `<i data-lucide="play" class="w-5 h-5 fill-current"></i> ${isTv ? 'Play Episode' : 'Play Movie'}`;
+                lucide.createIcons();
 
-            const btn = document.getElementById('modalPlayBtn');
-            btn.onclick = () => {
-                const s = isTv ? Number(document.querySelector('#seasonList .season-btn[aria-pressed="true"]')?.dataset.season || 1) : 1;
-                const e = isTv ? Number(document.getElementById('episodeSelect')?.value || 1) : 1;
-                const epTitle = item.title || item.name;
-                launchPlayer(item.id, item.media_type, s, e, epTitle);
+                const btn = document.getElementById('modalPlayBtn');
+                btn.onclick = () => {
+                    const s = isTv ? Number(document.querySelector('#seasonList .season-btn[aria-pressed="true"]')?.dataset.season || 1) : 1;
+                    const e = isTv ? Number(document.getElementById('episodeSelect')?.value || 1) : 1;
+                    const epTitle = safeItem.title || safeItem.name;
+                    launchPlayer(safeItem.id, safeItem.media_type, s, e, epTitle);
+                };
+
+                if(isTv) {
+                    document.getElementById('modalTvSelectors').classList.remove('hidden');
+                    loadSeasonsSimple(safeItem.id);
+                } else {
+                    document.getElementById('modalTvSelectors').classList.add('hidden');
+                }
+                fetchTrailerForItem(safeItem);
+                fetchModalExtras(safeItem);
+                syncWatchlistButton();
+
+                modal.classList.remove('hidden');
+                setTimeout(() => {
+                    modal.classList.remove('opacity-0');
+                    content.classList.remove('scale-95');
+                    content.classList.add('scale-100');
+                        content.classList.add('modal-fullscreen');
+                        modal.classList.add('modal-open');
+                        document.body.classList.add('modal-open');
+                        document.body.style.overflow = 'hidden';
+                }, 10);
             };
 
-            // If TV, show selectors and load seasons/episodes; otherwise hide selectors
-            if(isTv) {
-                document.getElementById('modalTvSelectors').classList.remove('hidden');
-                loadSeasonsSimple(item.id);
+            if(document.startViewTransition) {
+                document.startViewTransition(() => runOpen());
             } else {
-                document.getElementById('modalTvSelectors').classList.add('hidden');
+                runOpen();
             }
-            fetchTrailerForItem(item);
-            fetchModalExtras(item);
-
-            modal.classList.remove('hidden');
-            setTimeout(() => {
-                modal.classList.remove('opacity-0');
-                content.classList.remove('scale-95');
-                content.classList.add('scale-100');
-                    // make modal full-screen and prevent body scrolling
-                    content.classList.add('modal-fullscreen');
-                    modal.classList.add('modal-open');
-                    document.body.classList.add('modal-open');
-                    document.body.style.overflow = 'hidden';
-            }, 10);
         }
 
         function closeModal() {
@@ -750,6 +961,8 @@
             modal.classList.remove('modal-open');
             document.body.classList.remove('modal-open');
             document.body.style.overflow = '';
+            const backdropEl = document.getElementById('modalBackdrop');
+            if(backdropEl) backdropEl.style.viewTransitionName = '';
             setTimeout(() => modal.classList.add('hidden'), 300);
             // Clear any trailer playback
             const trailerFrame = document.getElementById('modalTrailerFrame');
@@ -758,6 +971,7 @@
             if(trailerContainer) trailerContainer.classList.add('hidden');
             const tBtn = document.getElementById('modalTrailerBtn');
             if(tBtn) tBtn.setAttribute('aria-pressed', 'false');
+            stopBackgroundTrailer();
             // No episode details panel - removed
         }
 
@@ -771,6 +985,7 @@
             if(trailerContainer) trailerContainer.classList.add('hidden');
             if(!trailerBtn) return;
             trailerBtn.style.display = 'none';
+            stopBackgroundTrailer();
             try {
                 const mediaPath = item.media_type === 'tv' ? 'tv' : 'movie';
                 const res = await fetch(`https://api.themoviedb.org/3/${mediaPath}/${item.id}/videos?api_key=${API_KEY}`);
@@ -786,6 +1001,18 @@
                     trailerBtn.setAttribute('aria-pressed', 'false');
                 }
             } catch (err) { console.warn('Trailer fetch error', err); }
+        }
+
+        function playBackgroundTrailer(key) {
+            // Autoplay disabled
+            stopBackgroundTrailer();
+        }
+
+        function stopBackgroundTrailer() {
+            const container = document.getElementById('modalBackdropVideo');
+            const frame = document.getElementById('modalBackdropVideoFrame');
+            if(frame) frame.src = '';
+            if(container) container.classList.remove('show');
         }
 
         // --- Simple Seasons & Episode Selector (lightweight) ---
@@ -861,6 +1088,23 @@
             try {
                 const res = await fetch(`https://api.themoviedb.org/3/${mediaPath}/${item.id}?api_key=${API_KEY}`);
                 const details = await res.json();
+                currentCollection = null;
+                const collectionBtn = document.getElementById('collectionBtn');
+                const collectionSection = document.getElementById('collectionSection');
+                if(collectionSection) {
+                    collectionSection.classList.add('hidden');
+                    const cGrid = document.getElementById('collectionGrid');
+                    if(cGrid) cGrid.innerHTML = '';
+                }
+                if(collectionBtn) {
+                    collectionBtn.classList.add('hidden');
+                    collectionBtn.querySelector('span').innerText = 'View Collection';
+                }
+                if(details && details.belongs_to_collection && collectionBtn) {
+                    currentCollection = details.belongs_to_collection;
+                    collectionBtn.classList.remove('hidden');
+                    collectionBtn.querySelector('span').innerText = details.belongs_to_collection.name || 'View Collection';
+                }
                 // Genres
                 if(details && Array.isArray(details.genres)) {
                     const gHtml = details.genres.map(g => `<span class="px-3 py-1 bg-white/5 rounded-full text-xs">${escapeHtml(g.name)}</span>`).join('');
@@ -911,14 +1155,49 @@
                     // Ensure media_type for openModal
                     r.media_type = r.media_type || item.media_type || (mediaPath === 'tv' ? 'tv' : 'movie');
                     return `
-                    <div role="button" tabindex="0" onclick='openModal(${JSON.stringify(r).replace(/'/g, "&#39;")})' onkeydown='if(event.key==="Enter"){openModal(${JSON.stringify(r).replace(/'/g, "&#39;")})}' class="cursor-pointer group rounded overflow-hidden border border-white/5 bg-[#0f0f0f]">
-                        <img src="${img}" loading="lazy" alt="${escapeHtml(title)} poster" class="w-full h-32 object-cover">
+                    <div role="button" tabindex="0" onclick='openModal(${JSON.stringify(r).replace(/'/g, "&#39;")})' onkeydown='if(event.key==="Enter"){openModal(${JSON.stringify(r).replace(/'/g, "&#39;")})}' oncontextmenu='return showContextMenu(event, ${JSON.stringify(r).replace(/'/g, "&#39;")})' class="cursor-pointer group rounded overflow-hidden border border-white/5 bg-[#0f0f0f]">
+                        <img src="${img}" loading="lazy" alt="${escapeHtml(title)} poster" class="w-full h-32 object-cover" style="view-transition-name: poster-${r.id}">
                         <div class="p-2 text-xs text-gray-300 font-medium truncate">${escapeHtml(title)}</div>
                     </div>`;
                 }).join('');
             } catch (err) {
                 console.warn('Recommendations fetch failed', err);
                 recEl.innerHTML = `<div class="text-sm text-gray-500">Failed to load</div>`;
+            }
+        }
+
+        async function viewCollection() {
+            if(!currentCollection || !currentCollection.id) return;
+            const grid = document.getElementById('collectionGrid');
+            const section = document.getElementById('collectionSection');
+            if(!grid || !section) return;
+            section.classList.remove('hidden');
+            grid.innerHTML = `<div class="text-sm text-gray-400">Loading collection...</div>`;
+            try {
+                const res = await fetch(`https://api.themoviedb.org/3/collection/${currentCollection.id}?api_key=${API_KEY}`);
+                const data = await res.json();
+                const parts = (data && data.parts) ? data.parts.slice().sort((a,b)=> {
+                    const da = new Date(a.release_date || a.first_air_date || '2100-01-01').getTime();
+                    const db = new Date(b.release_date || b.first_air_date || '2100-01-01').getTime();
+                    return da - db;
+                }) : [];
+                if(!parts.length) { grid.innerHTML = `<div class="text-sm text-gray-500">No collection items found</div>`; return; }
+                grid.innerHTML = parts.map(p => {
+                    const title = escapeHtml(p.title || p.name || 'Untitled');
+                    const img = p.poster_path ? `https://image.tmdb.org/t/p/w342${p.poster_path}` : (p.backdrop_path ? `https://image.tmdb.org/t/p/w780${p.backdrop_path}` : 'https://via.placeholder.com/300x169?text=No+Image');
+                    p.media_type = p.media_type || 'movie';
+                    return `
+                        <div role="button" tabindex="0" onclick='openModal(${JSON.stringify(p).replace(/'/g, "&#39;")})' onkeydown='if(event.key==="Enter"){openModal(${JSON.stringify(p).replace(/'/g, "&#39;")})}' oncontextmenu='return showContextMenu(event, ${JSON.stringify(p).replace(/'/g, "&#39;")})' class="cursor-pointer group rounded overflow-hidden border border-white/5 bg-[#0f0f0f]">
+                            <img src="${img}" loading="lazy" alt="${title} poster" class="w-full h-40 object-cover" style="view-transition-name: poster-${p.id}">
+                            <div class="p-3 text-sm text-white font-semibold truncate">${title}</div>
+                        </div>
+                    `;
+                }).join('');
+                section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                lucide.createIcons();
+            } catch (err) {
+                console.warn('Collection fetch failed', err);
+                grid.innerHTML = `<div class="text-sm text-gray-500">Failed to load collection</div>`;
             }
         }
 
@@ -1134,11 +1413,42 @@
             if(params.get('play')) launchPlayer(params.get('play'), params.get('type'), params.get('s')||1, params.get('e')||1, "Stream");
         }
 
-        function shareContent() {
-            if(!currentModalItem) return;
-            const url = `${window.location.origin}${window.location.pathname}?play=${currentModalItem.id}&type=${currentModalItem.media_type}`;
+        function copyLinkForItem(item) {
+            if(!item || !item.id) return;
+            const url = `${window.location.origin}${window.location.pathname}?play=${item.id}&type=${item.media_type || item.type}`;
             navigator.clipboard.writeText(url);
             showToast("Link copied!", "success");
+        }
+
+        async function showIdentity() {
+            const badge = document.getElementById('identityBadge');
+            const content = document.getElementById('identityContent');
+            if(identityTimer) clearTimeout(identityTimer);
+            if(badge) badge.classList.remove('hidden');
+            if(content) content.innerText = 'Fetching...';
+            try {
+                const res = await fetch('https://ipapi.co/json/');
+                const data = await res.json();
+                const ip = data.ip || 'Unknown IP';
+                const city = data.city || 'Unknown City';
+                const region = data.region || '';
+                const country = data.country_name || '';
+                const locStr = [city, region, country].filter(Boolean).join(', ');
+                if(content) content.innerText = `${ip}${locStr ? ' • ' + locStr : ''}`;
+                showToast(`IP: ${ip} ${locStr ? '• ' + locStr : ''}`, "info");
+            } catch (err) {
+                if(content) content.innerText = 'Failed to fetch IP';
+                showToast("Could not fetch IP info", "error");
+            }
+            identityTimer = setTimeout(() => {
+                const badgeEl = document.getElementById('identityBadge');
+                if(badgeEl) badgeEl.classList.add('hidden');
+            }, 4000);
+        }
+
+        function shareContent() {
+            if(!currentModalItem) return;
+            copyLinkForItem(currentModalItem);
         }
 
 
@@ -1188,10 +1498,11 @@
             grid.innerHTML = hist.map(h => {
                 const img = h.poster_path ? `https://image.tmdb.org/t/p/w342${h.poster_path}` : (h.backdrop_path ? `https://image.tmdb.org/t/p/w780${h.backdrop_path}` : 'https://via.placeholder.com/300x169?text=No+Image');
                 const title = escapeHtml(h.title || h.name || `ID:${h.id}`);
+                const itemJson = JSON.stringify({ ...h, media_type: h.type }).replace(/'/g, "&#39;");
                 return `
-                <div onclick="launchPlayer('${h.id}','${h.type}','${h.s}','${h.e}','Resume')" class="min-w-[160px] cursor-pointer group">
+                <div onclick="launchPlayer('${h.id}','${h.type}','${h.s}','${h.e}','Resume')" class="min-w-[160px] cursor-pointer group" oncontextmenu='return showContextMenu(event, ${itemJson})'>
                     <div class="aspect-video bg-white/5 rounded-xl flex items-center justify-center border border-white/5 group-hover:border-indigo-500 transition relative overflow-hidden shadow-lg">
-                        <img src="${img}" alt="${title}" class="absolute inset-0 w-full h-full object-cover" loading="lazy" oncontextmenu="return false">
+                        <img src="${img}" alt="${title}" class="absolute inset-0 w-full h-full object-cover" loading="lazy" style="view-transition-name: poster-${h.id}">
                         <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
                         <i data-lucide="play" class="w-10 h-10 text-white/60 group-hover:text-white transition transform group-hover:scale-110 z-10"></i>
                     </div>
