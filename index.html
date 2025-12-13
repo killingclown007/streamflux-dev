@@ -214,8 +214,22 @@
                         <button onclick="setTypeFilter('movie', this)" class="genre-btn px-6 py-2.5 rounded-full text-sm font-bold bg-[#1a1a1a] border border-white/10 hover:bg-white/10 hover:border-white/30 transition text-gray-300 whitespace-nowrap">Movies</button>
                         <button onclick="setTypeFilter('tv', this)" class="genre-btn px-6 py-2.5 rounded-full text-sm font-bold bg-[#1a1a1a] border border-white/10 hover:bg-white/10 hover:border-white/30 transition text-gray-300 whitespace-nowrap">TV Shows</button>
                     </div>
+                    <button onclick="surpriseMe()" class="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold bg-white/10 border border-white/10 hover:bg-white/20 transition whitespace-nowrap">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i> Surprise Me
+                    </button>
                 </div>
                 <div id="genreFilters" class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2"></div>
+            </div>
+
+            <!-- Data backup/restore -->
+            <div class="flex flex-wrap items-center gap-3 mb-12">
+                <button onclick="exportData()" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 border border-white/10 text-sm font-semibold hover:bg-white/20 transition">
+                    <i data-lucide="download" class="w-4 h-4"></i> Backup History
+                </button>
+                <button onclick="document.getElementById('importFile').click()" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 border border-white/10 text-sm font-semibold hover:bg-white/20 transition">
+                    <i data-lucide="upload" class="w-4 h-4"></i> Restore History
+                </button>
+                <input type="file" id="importFile" accept="application/json" class="hidden" onchange="handleImport(event)">
             </div>
 
             <!-- History Section -->
@@ -256,6 +270,9 @@
             </footer>
         </div>
     </main>
+
+    <!-- Toasts -->
+    <div id="toastContainer" class="fixed bottom-6 left-6 z-[120] flex flex-col gap-3 pointer-events-none"></div>
 
     <!-- INFO MODAL -->
     <div id="infoModal" class="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md hidden items-center justify-center p-4 transition-opacity duration-300 opacity-0" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
@@ -398,11 +415,13 @@
         let heroItems = [];
         let heroIndex = 0;
         let heroTimer = null;
+        let focusIndex = 0;
         let currentModalItem = null;
         let currentTrailerKey = null;
         let playData = { id: '', type: 'movie', season: 1, episode: 1 };
         let manualType = 'movie';
         const defaultTitle = "StreamFlux - Immersive Cinema";
+        let wakeLock = null;
 
 
         // --- Init ---
@@ -412,6 +431,10 @@
             setupInfiniteScroll();
             checkUrlParams();
             loadHistory();
+            setupKeyboardNavigation();
+            document.addEventListener('contextmenu', (e) => {
+                if (e.target.tagName === 'IMG') { e.preventDefault(); }
+            });
         };
 
         // --- Core Logic ---
@@ -486,14 +509,16 @@
 
         function renderGrid(items) {
             const grid = document.getElementById('trendingGrid');
+            let cardCounter = 0;
             grid.innerHTML = items.map((item, index) => {
                 if (index === 0) return ''; 
                 const title = escapeHtml(item.title || item.name || 'Untitled');
                 const poster = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : 'https://via.placeholder.com/500x750?text=No+Img';
+                const cardIndex = cardCounter++;
                 return `
-                <div role="button" tabindex="0" onclick='openModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' onkeydown='if(event.key==="Enter"){openModal(${JSON.stringify(item).replace(/'/g, "&#39;")})}' class="group cursor-pointer relative">
+                <div role="button" tabindex="0" data-card-index="${cardIndex}" onclick='openModal(${JSON.stringify(item).replace(/'/g, "&#39;")})' onkeydown='if(event.key==="Enter"){openModal(${JSON.stringify(item).replace(/'/g, "&#39;")})}' class="group cursor-pointer relative">
                     <div class="poster-card w-full rounded-xl overflow-hidden bg-[#1a1a1a] shadow-lg border border-white/5 transition duration-500 transform group-hover:scale-105 group-hover:border-indigo-500/50 group-hover:shadow-indigo-500/20 relative">
-                        <img src="${poster}" loading="lazy" alt="${title} Poster" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition duration-500">
+                        <img src="${poster}" loading="lazy" alt="${title} Poster" class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition duration-500" oncontextmenu="return false">
                         <!-- Quality Badge overlay -->
                         <div class="absolute top-2 right-2 quality-badge px-1.5 py-0.5 rounded text-[10px] font-bold text-white uppercase">HD</div>
                         
@@ -540,6 +565,7 @@
             renderGrid(filtered);
             const heroSource = (resetHero ? (filtered.length ? filtered : trendingData) : heroItems.length ? heroItems : trendingData);
             if (heroSource.length && (resetHero || !heroItems.length)) setHeroItems(heroSource);
+            focusIndex = 0;
         }
 
         async function loadGenres() {
@@ -577,6 +603,52 @@
             if (nearBottom) {
                 loadTrendingPage(trendingPage + 1, false);
             }
+        }
+
+        function surpriseMe() {
+            const movies = trendingData.filter(i => i.media_type === 'movie' && i.vote_average >= 7);
+            const pool = movies.length ? movies : trendingData;
+            if(!pool.length) return;
+            const pick = pool[Math.floor(Math.random() * pool.length)];
+            openModal(pick);
+            showToast("Picked a great title for you!", "success");
+        }
+
+        // Backup / Restore
+        function exportData() {
+            const payload = {
+                hist: JSON.parse(localStorage.getItem('hist') || '[]')
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `streamflux-backup-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("History backed up", "success");
+        }
+
+        function handleImport(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                try {
+                    const data = JSON.parse(evt.target.result || '{}');
+                    if(Array.isArray(data.hist)) {
+                        localStorage.setItem('hist', JSON.stringify(data.hist.slice(0,10)));
+                        loadHistory();
+                        showToast("History restored", "success");
+                    } else {
+                        showToast("Invalid backup file", "error");
+                    }
+                } catch (err) {
+                    showToast("Import failed", "error");
+                }
+                e.target.value = '';
+            };
+            reader.readAsText(file);
         }
 
         // --- Modal System ---
@@ -825,6 +897,8 @@
             const player = document.getElementById('playerView');
             player.classList.remove('hidden');
             player.classList.add('flex');
+
+            requestWakeLock();
             
             document.getElementById('nextEpBtn').classList.toggle('hidden', type !== 'tv');
             document.getElementById('nextEpBtn').classList.toggle('flex', type === 'tv');
@@ -866,6 +940,7 @@
             document.getElementById('playerView').classList.remove('flex');
             document.title = defaultTitle;
             document.body.style.overflow = ''; 
+            releaseWakeLock();
             loadHistory();
         }
 
@@ -873,6 +948,34 @@
             playData.episode++;
             launchPlayer(playData.id, playData.type, playData.season, playData.episode, "Next Episode");
         }
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => { wakeLock = null; });
+                }
+            } catch (err) {
+                console.warn('Wake Lock request failed', err);
+            }
+        }
+
+        function releaseWakeLock() {
+            try {
+                if (wakeLock) {
+                    wakeLock.release();
+                    wakeLock = null;
+                }
+            } catch (err) {
+                console.warn('Wake Lock release failed', err);
+            }
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                releaseWakeLock();
+            }
+        });
 
         // --- Search ---
         let searchTimer;
@@ -961,7 +1064,7 @@
             if(!currentModalItem) return;
             const url = `${window.location.origin}${window.location.pathname}?play=${currentModalItem.id}&type=${currentModalItem.media_type}`;
             navigator.clipboard.writeText(url);
-            alert("Shareable Link Copied!");
+            showToast("Link copied!", "success");
         }
 
 
@@ -1014,7 +1117,7 @@
                 return `
                 <div onclick="launchPlayer('${h.id}','${h.type}','${h.s}','${h.e}','Resume')" class="min-w-[160px] cursor-pointer group">
                     <div class="aspect-video bg-white/5 rounded-xl flex items-center justify-center border border-white/5 group-hover:border-indigo-500 transition relative overflow-hidden shadow-lg">
-                        <img src="${img}" alt="${title}" class="absolute inset-0 w-full h-full object-cover" loading="lazy">
+                        <img src="${img}" alt="${title}" class="absolute inset-0 w-full h-full object-cover" loading="lazy" oncontextmenu="return false">
                         <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
                         <i data-lucide="play" class="w-10 h-10 text-white/60 group-hover:text-white transition transform group-hover:scale-110 z-10"></i>
                     </div>
@@ -1029,6 +1132,39 @@
         }
 
         function resetApp() { window.location.href = window.location.pathname; }
+
+        // --- Toasts ---
+        function showToast(message, type = "info") {
+            const container = document.getElementById('toastContainer');
+            if(!container) return;
+            const id = `toast-${Date.now()}`;
+            const colors = {
+                success: 'from-emerald-500/30 to-emerald-400/10 border-emerald-500/30 text-emerald-100',
+                info: 'from-indigo-500/30 to-indigo-400/10 border-indigo-500/30 text-indigo-100',
+                error: 'from-rose-500/30 to-rose-400/10 border-rose-500/30 text-rose-100'
+            };
+            const color = colors[type] || colors.info;
+            const toast = document.createElement('div');
+            toast.id = id;
+            toast.className = `pointer-events-auto transition-all duration-500 translate-x-0 opacity-100`;
+            toast.innerHTML = `
+                <div class="relative overflow-hidden rounded-xl border ${color} shadow-lg bg-gradient-to-r">
+                    <div class="absolute inset-0 bg-black/40"></div>
+                    <div class="relative flex items-center gap-3 px-4 py-3">
+                        <div class="p-2 rounded-full bg-black/30 border border-white/10">
+                            <i data-lucide="${type === 'success' ? 'check' : type === 'error' ? 'alert-circle' : 'info'}" class="w-4 h-4"></i>
+                        </div>
+                        <div class="text-sm font-semibold">${escapeHtml(message)}</div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => {
+                toast.classList.add('translate-x-2', 'opacity-0');
+                setTimeout(() => toast.remove(), 400);
+            }, 2200);
+        }
         // --- Notification Logic ---
 setTimeout(() => {
     const note = document.getElementById('securityNote');
@@ -1044,6 +1180,44 @@ function dismissNote() {
         setTimeout(() => note.remove(), 700); // Removes from DOM after animation
     }
 }
+
+        // Keyboard navigation for TV/remote basics
+        function setupKeyboardNavigation() {
+            document.addEventListener('keydown', (e) => {
+                const target = e.target;
+                if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+                const modalOpen = !document.getElementById('infoModal').classList.contains('hidden');
+                const playerOpen = !document.getElementById('playerView').classList.contains('hidden');
+                if (modalOpen || playerOpen) return;
+                const cards = Array.from(document.querySelectorAll('#trendingGrid [data-card-index]'));
+                if (!cards.length) return;
+                const cols = 5; // approximate grid width
+                switch(e.key) {
+                    case 'ArrowRight':
+                        e.preventDefault(); focusCard(focusIndex + 1, cards); break;
+                    case 'ArrowLeft':
+                        e.preventDefault(); focusCard(focusIndex - 1, cards); break;
+                    case 'ArrowDown':
+                        e.preventDefault(); focusCard(focusIndex + cols, cards); break;
+                    case 'ArrowUp':
+                        e.preventDefault(); focusCard(focusIndex - cols, cards); break;
+                    case 'Enter':
+                    case ' ':
+                        e.preventDefault(); if(cards[focusIndex]) cards[focusIndex].click(); break;
+                    default:
+                        break;
+                }
+            });
+        }
+
+        function focusCard(index, cards) {
+            if (!cards || !cards.length) return;
+            const total = cards.length;
+            focusIndex = (index + total) % total;
+            const el = cards[focusIndex];
+            el.focus({ preventScroll: false });
+            el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        }
     </script>
     <!-- Floating Note Notification -->
 <div id="securityNote" class="fixed bottom-6 right-6 z-[100] translate-y-24 opacity-0 transition-all duration-700 ease-out pointer-events-none">
