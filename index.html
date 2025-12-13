@@ -374,7 +374,11 @@
                 <button id="nextEpBtn" onclick="nextEpisode()" class="hidden items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-full text-sm font-bold transition">
                     Next Episode <i data-lucide="skip-forward" class="w-4 h-4"></i>
                 </button>
-                <select id="serverSelect" onchange="reloadVideo()" class="bg-[#1a1a1a] text-white text-xs border border-white/10 rounded-lg px-3 py-2 outline-none focus:border-indigo-500">
+                <button onclick="hardRefresh()" class="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-full text-xs font-semibold transition border border-white/10">
+                    <i data-lucide="refresh-ccw" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Hard Refresh</span>
+                </button>
+                <select id="serverSelect" onchange="handleServerChange()" class="bg-[#1a1a1a] text-white text-xs border border-white/10 rounded-lg px-3 py-2 outline-none focus:border-indigo-500">
                     <option value="vidlink">Earth (Fast)</option>
                     <option value="vidfast">Moon (Ultra)</option>
                     <option value="vidsrcto">Mercury (HD)</option>
@@ -430,6 +434,7 @@
         let manualType = 'movie';
         const defaultTitle = "StreamFlux - Immersive Cinema";
         let wakeLock = null;
+        const SERVER_PREF_KEY = 'sf-preferred-server';
 
 
         // --- Init ---
@@ -440,6 +445,7 @@
             checkUrlParams();
             loadHistory();
             setupKeyboardNavigation();
+            hydratePreferredServer();
             document.addEventListener('contextmenu', (e) => {
                 if (e.target.tagName === 'IMG') { e.preventDefault(); }
             });
@@ -937,7 +943,28 @@
             document.getElementById('nextEpBtn').classList.toggle('hidden', type !== 'tv');
             document.getElementById('nextEpBtn').classList.toggle('flex', type === 'tv');
 
+            hydratePreferredServer();
             reloadVideo();
+        }
+
+        function handleServerChange() {
+            const select = document.getElementById('serverSelect');
+            if(!select) return;
+            try {
+                localStorage.setItem(SERVER_PREF_KEY, select.value);
+            } catch (err) {
+                console.warn('Server preference save failed', err);
+            }
+            reloadVideo();
+        }
+
+        function hydratePreferredServer() {
+            const select = document.getElementById('serverSelect');
+            if(!select) return;
+            const stored = localStorage.getItem(SERVER_PREF_KEY);
+            if(stored && Array.from(select.options).some(opt => opt.value === stored)) {
+                select.value = stored;
+            }
         }
 
         function reloadVideo() {
@@ -966,6 +993,19 @@
                     break;
             }
             iframe.src = url;
+        }
+
+        // Reloads the iframe without disturbing the page when streams stall
+        function hardRefresh() {
+            const iframe = document.getElementById('videoFrame');
+            if(!iframe) return;
+            const currentSrc = iframe.src;
+            if(!currentSrc) { reloadVideo(); return; }
+            iframe.src = '';
+            setTimeout(() => {
+                const busted = currentSrc.includes('?') ? `${currentSrc}&_r=${Date.now()}` : `${currentSrc}?_r=${Date.now()}`;
+                iframe.src = busted;
+            }, 50);
         }
 
         function closePlayer() {
